@@ -1,2 +1,2 @@
 # central_communication_module
-Project for studt LoRa and Arduino
+Project for study LoRa and Arduino
