@@ -1,5 +1,5 @@
 /* 
- * Sensor Monitoring using Arduino and LoRa SX1278 Module, receiver code
+ *  Receiver Side Code
  * 
   Module SX1278 // Arduino UNO/NANO    
     Vcc         ->   3.3V
@@ -7,17 +7,17 @@
     MOSI        ->   D11     
     SLCK        ->   D13
     Nss         ->   D10
-    GND         ->   GND 
+    GND         ->   GND
  */
 
 #include <SPI.h>
 #include <LoRa.h>  
-String inString = "";    // string to hold input
-int val = 0;
+String inString = "";    // string to hold incoming charaters
+String MyMessage = ""; // Holds the complete message
 
 void setup() {
   Serial.begin(9600);
-  
+ 
   while (!Serial);
   Serial.println("LoRa Receiver");
   if (!LoRa.begin(433E6)) { // or 915E6
@@ -36,12 +36,12 @@ void loop() {
     {
       int inChar = LoRa.read();
       inString += (char)inChar;
-      val = inString.toInt();       
+      MyMessage = inString;       
     }
     inString = "";     
     LoRa.packetRssi();    
   }
-  Serial.print("POT:");    
-  Serial.println(val);  
-
+      
+  Serial.println(MyMessage);  
+  
 }
