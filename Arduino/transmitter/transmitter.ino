@@ -19,6 +19,8 @@ void setup() {
   LoRa.setPins(53, 48, 49);
   while (!Serial);  
   Serial.println("LoRa Sender");
+//  int a =  LoRa.begin(433E6);
+//  Serial.println(a);
   if (!LoRa.begin(433E6)) { // or 915E6, the MHz speed of your module
     Serial.println("Starting LoRa failed!");
     while (1);
