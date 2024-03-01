@@ -33,6 +33,7 @@ void loop() {
 
   if (packetSize) { 
     // read packet    
+
     while (LoRa.available())
     {
       int inChar = LoRa.read();
