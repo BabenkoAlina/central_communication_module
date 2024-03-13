@@ -16,11 +16,11 @@ void setup() {
   
   Serial.begin(9600);
 //  (int ss, int reset, int dio0)
-  LoRa.setPins(53, 48, 49);
+  LoRa.setPins(10, 8, 9);
   while (!Serial);  
   Serial.println("LoRa Sender");
-//  int a =  LoRa.begin(433E6);
-//  Serial.println(a);
+  int a =  LoRa.begin(433E6);
+  Serial.println(a);
   if (!LoRa.begin(433E6)) { // or 915E6, the MHz speed of your module
     Serial.println("Starting LoRa failed!");
     while (1);
@@ -30,9 +30,10 @@ void setup() {
 void loop() {
 String MyMessage = "Hello World, this is Electronic Clinic";
   LoRa.beginPacket();  
+  Serial.println(1);
   LoRa.print(MyMessage);
   LoRa.endPacket();
+//  Serial.println(a);
   delay(100);
-//  Serial.println("ot");
 
  }
