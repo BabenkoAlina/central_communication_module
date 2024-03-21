@@ -1,6 +1,5 @@
 /*  
  *  Sensor
- *  Transmitter side Code
  *  For Arduino Nano
  * 
   Module SX1278 // Arduino UNO/NANO    
@@ -18,7 +17,7 @@
 void setup() {
   Serial.begin(9600);
 //  (int ss, int reset, int dio0)
-  LoRa.setPins(2, 34, 35);
+  LoRa.setPins(10, 9, 8);
   while (!Serial);  
   Serial.println("LoRa Sender");
   int a =  LoRa.begin(433E6);
@@ -30,9 +29,9 @@ void setup() {
 }
 
 void loop() {
-String MyMessage = "Hello World, this is Electronic Clinic";
-  LoRa.beginPacket();  
+  String MyMessage = "Hello World, this is Electronic Clinic";
+  LoRa.beginPacket();
   LoRa.print(MyMessage);
   LoRa.endPacket();
   delay(100);
- }
+}

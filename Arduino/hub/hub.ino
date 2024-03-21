@@ -1,6 +1,5 @@
 /*
  *  HUB 
- *  Receiver Side Code
  *  For ESP32-WROOM-32
  * 
   Module SX1278 // Arduino UNO/NANO    
@@ -19,7 +18,8 @@ String MyMessage = "";
 
 void setup() {
   Serial.begin(9600);
-  LoRa.setPins(10, 8, 9);
+//  (int ss, int reset, int dio0)
+  LoRa.setPins(2, 34, 35);
   while (!Serial);
   Serial.println("LoRa Receiver");
   if (!LoRa.begin(433E6)) 
@@ -42,3 +42,5 @@ void loop() {
     Serial.println(MyMessage);  
   }  
 }
+
+
