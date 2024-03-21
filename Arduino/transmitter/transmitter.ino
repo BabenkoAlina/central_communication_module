@@ -5,10 +5,10 @@
  * 
   Module SX1278 // Arduino UNO/NANO    
     Vcc         ->   3.3V
-    MISO        ->   D19
-    MOSI        ->   D23     
-    SLCK        ->   D18
-    NSS         ->   D2
+    MISO        ->   D12
+    MOSI        ->   D11     
+    SLCK        ->   D13
+    Nss         ->   D10
     GND         ->   GND
  */
 
