@@ -19,10 +19,10 @@ String MyMessage = "";
 void setup() {
   Serial.begin(9600);
 //  (int ss, int reset, int dio0)
-  LoRa.setPins(2, 34, 35);
+  LoRa.setPins(2, 32, 33);
   while (!Serial);
   Serial.println("LoRa Receiver");
-  if (!LoRa.begin(433E6)) 
+  if (!LoRa.begin(433E6)) {
       Serial.println("Starting LoRa failed!");
     while (1);
   }
@@ -42,5 +42,3 @@ void loop() {
     Serial.println(MyMessage);  
   }  
 }
-
-
