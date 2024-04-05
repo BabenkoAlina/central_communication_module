@@ -14,9 +14,16 @@
 #include <LoRa.h>
 #include <EEPROM.h>
 
-String inString = "";    // string to hold incoming charaters
+#define RECEIVER_ADDRESS 0x01 // Address of this receiver
+
+String inString = "";    // string to hold incoming characters
 String MyMessage = ""; // Holds the complete message
-bool isPaired;
+
+uint8_t message[64];
+uint8_t isPaired = message[0];
+uint8_t serverAddress = message[2];
+uint8_t secretHash = (message[3] << 8)| message[35];
+
 int gpioPin = 1;
 unsigned long previousMillis = 0; // Variable to store the previous time
 const long interval = 30000; // Interval in milliseconds (30 seconds)
@@ -31,12 +38,15 @@ void setup() {
         while (1);
     }
     pinMode(gpioPin, INPUT);
+
     int state = digitalRead(gpioPin);
+
     if (isPaired) {
         if (state == HIGH) {
             for (int i = 0; i < 100; ++i) {
                 if (state == HIGH) {
-                    Serial.println("GPIO1 is HIGH");
+                    Serial.println("GPIO1 is HIGH. Read the address");
+                    EEPROM.read(RECEIVER_ADDRESS);
                 } else {
                     return;
                 }
@@ -45,13 +55,15 @@ void setup() {
                 }
             }
             Serial.println("I am ready to pairing! This is my key: ");
-            pairing();
-        }
-    } else {
-        Serial.println("I am ready to pairing! This is my key: ");
-        pairing();
+            EEPROM.write(RECEIVER_ADDRESS, message);
+            // pairing();
+        } else {
+            Serial.println("I am ready to pairing! This is my key: ");
+            EEPROM.write(RECEIVER_ADDRESS, message);
+            // pairing();
         }
     }
+}
 
     void loop() {
 
