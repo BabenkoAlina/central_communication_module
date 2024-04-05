@@ -32,20 +32,25 @@ void setup() {
     }
     pinMode(gpioPin, INPUT);
     int state = digitalRead(gpioPin);
-    if (isPaired){
-        for(int i = 0; i < 100; ++i){
-            if (state == HIGH) {
-                if (millis() - previousMillis >= interval) {
-                    previousMillis = millis();
-                } else{
+    if (isPaired) {
+        if (state == HIGH) {
+            for (int i = 0; i < 100; ++i) {
+                if (state == HIGH) {
+                    Serial.println("GPIO1 is HIGH");
+                } else {
                     return;
                 }
+                if (millis() - previousMillis >= interval) {
+                    previousMillis = millis();
+                }
             }
-            pairing();
-        } else {
+            Serial.println("I am ready to pairing! This is my key: ");
             pairing();
         }
-
+    } else {
+        Serial.println("I am ready to pairing! This is my key: ");
+        pairing();
+        }
     }
 
     void loop() {
