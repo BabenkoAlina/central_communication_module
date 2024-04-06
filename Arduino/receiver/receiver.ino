@@ -40,13 +40,18 @@ void setup() {
     pinMode(gpioPin, INPUT);
 
     int state = digitalRead(gpioPin);
+    // for (int i = 0; i < 64; i++) {
+    // message[i] = EEPROM.read(RECEIVER_ADDRESS + i);
+    // }
 
-    if (isPaired == 64) {
+    isPaired = 32;
+    EEPROM.write(RECEIVER_ADDRESS, message);
+
+    if (message[0] == 32) {
         if (state == HIGH) {
             for (int i = 0; i < 100; ++i) {
                 if (state == HIGH) {
                     Serial.println("GPIO1 is HIGH. Read the address");
-                    EEPROM.read(RECEIVER_ADDRESS);
                 } else {
                     return;
                 }
@@ -55,14 +60,14 @@ void setup() {
                 }
             }
             Serial.println("I am ready to pairing! This is my key: ");
+            // pairing();
             isPaired == 64;
             EEPROM.write(RECEIVER_ADDRESS, message);
-            // pairing();
+
         }
     } else {
-        Serial.println("I am ready to pairing! This is my key: ");
-        isPaired == 64;
-        EEPROM.write(RECEIVER_ADDRESS, message);
+        Serial.println("I am paired already");
+        // EEPROM.write(RECEIVER_ADDRESS, message);
         // pairing();
     }
 }
