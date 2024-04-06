@@ -41,7 +41,7 @@ void setup() {
 
     int state = digitalRead(gpioPin);
 
-    if (isPaired) {
+    if (isPaired == 64) {
         if (state == HIGH) {
             for (int i = 0; i < 100; ++i) {
                 if (state == HIGH) {
@@ -55,34 +55,35 @@ void setup() {
                 }
             }
             Serial.println("I am ready to pairing! This is my key: ");
-            EEPROM.write(RECEIVER_ADDRESS, message);
-            // pairing();
-        } else {
-            Serial.println("I am ready to pairing! This is my key: ");
+            isPaired == 64;
             EEPROM.write(RECEIVER_ADDRESS, message);
             // pairing();
         }
+    } else {
+        Serial.println("I am ready to pairing! This is my key: ");
+        isPaired == 64;
+        EEPROM.write(RECEIVER_ADDRESS, message);
+        // pairing();
     }
 }
 
-    void loop() {
+void loop() {
 
-        // try to parse packet
-        int packetSize = LoRa.parsePacket();
+    // try to parse packet
+    int packetSize = LoRa.parsePacket();
 //  Serial.println(packetSize);
-        if (packetSize) {
-            // read packet
-            while (LoRa.available())
-            {
-                int inChar = LoRa.read();
-                inString += (char)inChar;
-                MyMessage = inString;
+    if (packetSize) {
+        // read packet
+        while (LoRa.available())
+        {
+            int inChar = LoRa.read();
+            inString += (char)inChar;
+            MyMessage = inString;
 
-            }
-            inString = "";
-            LoRa.packetRssi();
-            Serial.println(MyMessage);
         }
-
+        inString = "";
+        LoRa.packetRssi();
+        Serial.println(MyMessage);
     }
 
+}
