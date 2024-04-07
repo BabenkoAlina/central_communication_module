@@ -21,33 +21,35 @@
 #define SECRET_HASH_ADDRESS 3
 #define notPaired 32
 
-
+uint16_t serverAddress;
+byte secretHashBytes[32];
+byte isPaired;
 String inString = "";
 String MyMessage = "";
 
 int gpioPin = 1;
 
-void normal(){
-    uint16_t serverAddress = EEPROM.read(SERVER_ADDRESS_ADDRESS) << 8 | EEPROM.read(SERVER_ADDRESS_ADDRESS + 1);
+void readEEPROM(){
+    serverAddress = EEPROM.read(SERVER_ADDRESS_ADDRESS) << 8 | EEPROM.read(SERVER_ADDRESS_ADDRESS + 1);
     Serial.print("Server Address: ");
     Serial.println(serverAddress);
 
     Serial.println("Secret Hash:");
-    byte secretHashBytes[32];
+    secretHashBytes[32];
     for (int i = 0; i < 32; i++) {
         secretHashBytes[i] = EEPROM.read(SECRET_HASH_ADDRESS + i);
         Serial.print(secretHashBytes[i], HEX);
     }
     Serial.println();
 }
-}
 
 void pairing(){
-    uint16_t serverAddress = 1234;
+    // ...
+    uint16_t serverAddress = 1234;  // get from protocol, Volodya part
     EEPROM.write(SERVER_ADDRESS_ADDRESS, serverAddress >> 8);
     EEPROM.write(SERVER_ADDRESS_ADDRESS + 1, serverAddress & 0xFF);
 
-    byte secretHashBytes[32];
+    byte secretHashBytes[32]; // get from protocol, Volodya part
     for (int i = 0; i < 32; i++) {
         secretHashBytes[i] = i;
         EEPROM.write(SECRET_HASH_ADDRESS + i, secretHashBytes[i]);
@@ -65,20 +67,15 @@ void setup() {
         Serial.println("Starting LoRa failed!");
         while (1);
     }
-    pinMode(gpioPin, INPUT);
 
-    int state = digitalRead(gpioPin);
-    // for (int i = 0; i < 64; i++) {
-    // message[i] = EEPROM.read(RECEIVER_ADDRESS + i);
-    // }
-    byte isPaired = EEPROM.read(IS_PAIRED_ADDRESS);
-    // byte serverAddress = 0;
-    // byte secretHash = 0;
+    isPaired = EEPROM.read(IS_PAIRED_ADDRESS);
 
     if (isPaired == notPaired){
-        Serial.println("I am ready to pairing! This is my key: ");
+        Serial.println("I am ready to pairing!");
         pairing();
     } else {
+        pinMode(gpioPin, INPUT);
+        int state = digitalRead(gpioPin);
         for (int i = 0; i < 100; ++i) {
             if (state == HIGH) {
                 Serial.println("GPIO1 is HIGH. Read the address");
@@ -86,9 +83,12 @@ void setup() {
                 break;
             }
             delay(30);
+            if (i == 99) {
+                pairing();
+            }
         }
 
-        normal();
+        readEEPROM();
     }
 
     void loop() {
