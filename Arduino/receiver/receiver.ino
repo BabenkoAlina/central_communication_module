@@ -14,19 +14,47 @@
 #include <LoRa.h>
 #include <EEPROM.h>
 
-#define RECEIVER_ADDRESS 0x01 // Address of this receiver
+#define RECEIVER_ADDRESS 0x01
 
-String inString = "";    // string to hold incoming characters
-String MyMessage = ""; // Holds the complete message
+#define IS_PAIRED_ADDRESS 0
+#define SERVER_ADDRESS_ADDRESS 1
+#define SECRET_HASH_ADDRESS 3
+#define notPaired 32
 
-uint8_t message[64];
-uint8_t isPaired = message[0];
-uint8_t serverAddress = message[2];
-uint8_t secretHash = (message[3] << 8)| message[35];
+
+String inString = "";
+String MyMessage = "";
 
 int gpioPin = 1;
-unsigned long previousMillis = 0; // Variable to store the previous time
-const long interval = 30000; // Interval in milliseconds (30 seconds)
+
+void normal(){
+    uint16_t serverAddress = EEPROM.read(SERVER_ADDRESS_ADDRESS) << 8 | EEPROM.read(SERVER_ADDRESS_ADDRESS + 1);
+    Serial.print("Server Address: ");
+    Serial.println(serverAddress);
+
+    Serial.println("Secret Hash:");
+    byte secretHashBytes[32];
+    for (int i = 0; i < 32; i++) {
+        secretHashBytes[i] = EEPROM.read(SECRET_HASH_ADDRESS + i);
+        Serial.print(secretHashBytes[i], HEX);
+    }
+    Serial.println();
+}
+}
+
+void pairing(){
+    uint16_t serverAddress = 1234;
+    EEPROM.write(SERVER_ADDRESS_ADDRESS, serverAddress >> 8);
+    EEPROM.write(SERVER_ADDRESS_ADDRESS + 1, serverAddress & 0xFF);
+
+    byte secretHashBytes[32];
+    for (int i = 0; i < 32; i++) {
+        secretHashBytes[i] = i;
+        EEPROM.write(SECRET_HASH_ADDRESS + i, secretHashBytes[i]);
+    }
+
+    Serial.println("Data written to EEPROM");
+}
 
 void setup() {
     Serial.begin(9600);
@@ -43,52 +71,55 @@ void setup() {
     // for (int i = 0; i < 64; i++) {
     // message[i] = EEPROM.read(RECEIVER_ADDRESS + i);
     // }
+    byte isPaired = EEPROM.read(IS_PAIRED_ADDRESS);
+    // byte serverAddress = 0;
+    // byte secretHash = 0;
 
-    isPaired = 32;
-    EEPROM.write(RECEIVER_ADDRESS, message);
-
-    if (message[0] == 32) {
-        if (state == HIGH) {
-            for (int i = 0; i < 100; ++i) {
-                if (state == HIGH) {
-                    Serial.println("GPIO1 is HIGH. Read the address");
-                } else {
-                    return;
-                }
-                if (millis() - previousMillis >= interval) {
-                    previousMillis = millis();
-                }
-            }
-            Serial.println("I am ready to pairing! This is my key: ");
-            // pairing();
-            isPaired == 64;
-            EEPROM.write(RECEIVER_ADDRESS, message);
-
-        }
+    if (isPaired == notPaired){
+        Serial.println("I am ready to pairing! This is my key: ");
+        pairing();
     } else {
-        Serial.println("I am paired already");
-        // EEPROM.write(RECEIVER_ADDRESS, message);
-        // pairing();
-    }
-}
-
-void loop() {
-
-    // try to parse packet
-    int packetSize = LoRa.parsePacket();
-//  Serial.println(packetSize);
-    if (packetSize) {
-        // read packet
-        while (LoRa.available())
-        {
-            int inChar = LoRa.read();
-            inString += (char)inChar;
-            MyMessage = inString;
-
+        for (int i = 0; i < 100; ++i) {
+            if (state == HIGH) {
+                Serial.println("GPIO1 is HIGH. Read the address");
+            } else {
+                break;
+            }
+            delay(30);
         }
-        inString = "";
-        LoRa.packetRssi();
-        Serial.println(MyMessage);
+
+        normal();
     }
 
-}
+    void loop() {
+
+        // try to parse packet
+        int packetSize = LoRa.parsePacket();
+//  Serial.println(packetSize);
+        if (packetSize) {
+            // read packet
+            while (LoRa.available())
+            {
+                int inChar = LoRa.read();
+                inString += (char)inChar;
+                MyMessage = inString;
+
+            }
+            inString = "";
+            LoRa.packetRssi();
+            Serial.println(MyMessage);
+        }
+
+        uint8_t receivedMessage[64];
+
+        uint8_t magicByte = receivedMessage[0];
+        uint8_t header = receivedMessage[1];
+        uint16_t addressTo = (receivedMessage[2] << 8) | receivedMessage[3];
+        uint16_t addressFrom = (receivedMessage[4] << 8) | receivedMessage[5];
+        char message[59];
+        for (int i = 0; i < 58; i++) {
+            message[i] = receivedMessage[6 + i];
+        }
+        message[58] = '\0';
+
+    }
