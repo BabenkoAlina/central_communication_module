@@ -148,13 +148,14 @@ void hash_key(){
 void encode_message(){
   Serial.println("encode message");
   for(uint8_t elem: plainText){
-    Serial.print(elem,HEX);
+    Serial.print((char)elem);
   }
+  Serial.println();
   cipherblock.setKey(hashedKey, 32);
   cipherblock.encryptBlock(cipherText, plainText);
   Serial.println("encrypted message:");
   for (uint8_t elem : cipherText) {
-    Serial.print(elem, HEX);
+    Serial.print((char)elem);
   }
   Serial.println("\n");
 }
@@ -164,7 +165,7 @@ void decrypt_message(){
   cipherblock.decryptBlock(decrypted, cipherText);
   Serial.println("decrypted message should be : Hello, AES256!");
   for (uint8_t elem : decrypted) {
-    Serial.print(elem, HEX);
+    Serial.print((char)elem);
   }
   Serial.println("\n");
 }
