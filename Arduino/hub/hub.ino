@@ -3,7 +3,7 @@
  *  HUB
  *  For ESP32-WROOM-32
  *
-  Module SX1278 // Arduino UNO/NANO
+  Module SX1278
     Vcc         ->   3.3V
     MISO        ->   D19
     MOSI        ->   D23
@@ -21,9 +21,14 @@
 #include <string>
 #include <sstream>
 
+#include <P521.h>
+#include <Curve25519.h>
+#include <SHA3.h>
+#include <AES.h>
+#include <base64.hpp>
+
 #define SERVER_ADDRESS 0x00
 
-//[1 byte] - header (1 - request for pairing, 2 - response for pairing, 3-pairing procedure, 128-encrypted hello, 255-message)
 #define HEADER_PAIRING_REQUEST 1
 #define HEADER_PAIRING_RESPONSE 2
 #define HEADER_PAIRING_PROCEDURE 3
@@ -35,9 +40,9 @@ struct SensorStruct {
 //    String name;
 //    String type;
 //    String units;
-    std::string hashedKey;
+    uint8_t hashedKey[32];
 };
-std::map<uint16_t, std::string> dataSPIFFS; // Use address as key
+std::map<uint16_t, SensorStruct> dataSPIFFS;
 
 struct Packet {
     uint8_t magicByte;
@@ -47,20 +52,116 @@ struct Packet {
     char message[58];
 };
 
-uint8_t privateKeyHub[66];
-uint8_t publicKeyHub[132];
+uint8_t privateKeyHub[32];
+uint8_t publicKeyHub[32];
+uint8_t combinedKey[32];
+uint8_t hashedKey[32];
+
+
+AES256 cipherBlock;
+SHA3_256 sha3;
 
 void createPacket(Packet& packet, uint8_t header, uint16_t addressTo, uint16_t addressFrom, const char* message) {
-    packet.magicByte = 50; // Example magic byte
+    packet.magicByte = 50;
     packet.header = header;
     packet.addressTo = addressTo;
     packet.addressFrom = addressFrom;
     strncpy(packet.message, message, 57);
-    packet.message[57] = '\0'; // Ensure null-terminated string
+    packet.message[57] = '\0';
+
 }
 
 void parsePacket(const uint8_t* buffer, Packet& packet) {
     memcpy(&packet, buffer, sizeof(Packet));
+}
+
+
+
+void generate_keys() {
+    Serial.println("start generating keys for user1");
+    Curve25519::dh1(publicKeyHub, privateKeyHub);
+    Serial.println("generated the key");
+    Serial.println("publicKey1: ");
+    for(uint8_t elem: publicKeyHub){
+        Serial.print(elem, HEX);
+    }
+    Serial.print("\n");
+
+    Serial.println("privateKey1:");
+    for(uint8_t elem: privateKeyHub){
+        Serial.print(elem, HEX);
+    }
+    Serial.println("\n");
+}
+
+
+void mix_key(String publicKeyReceived) {
+    // convert string to uint8_t
+    for (int i = 0; i < 32; i++) {
+        combinedKey[i] = publicKeyReceived.charAt(i);
+    }
+    Serial.println("derive shared key for user1");
+    if(!Curve25519::dh2(combinedKey, privateKeyHub)){
+        Serial.println("Couldn't derive shared key");
+    };
+    Serial.println("derived the key");
+
+    Serial.println("sharedKey1: ");
+    for (uint8_t elem : combinedKey) {
+        Serial.print(elem, HEX);
+    }
+    Serial.println("\n");
+}
+
+void hash_key(){
+    uint8_t encryptionKey[32];
+    memcpy(encryptionKey, combinedKey, sizeof(combinedKey));
+    sha3.update(encryptionKey, 32);
+    sha3.finalize(hashedKey, 32);
+    sha3.reset();
+    for (uint8_t elem : hashedKey) {
+        Serial.print(elem, HEX);
+    }
+}
+
+
+uint8_t* encode_message(const char* text) {
+    Serial.println("encode message");
+    uint8_t gotText[58];
+    for(int i = 0; text[i] != '\0' && i < 57; i++) {
+        Serial.print(text[i]);
+    }
+    Serial.println();
+
+    cipherBlock.setKey(hashedKey, 32);
+    cipherBlock.encryptBlock(gotText, reinterpret_cast<const uint8_t*>(text));
+
+    Serial.println("encrypted message:");
+    for (int i = 0; i < 57; i++) {
+        Serial.print((char)gotText[i]);
+    }
+    Serial.println("\n");
+    return gotText;
+}
+
+
+char* decrypt_message(uint8_t* gotText) {
+    Serial.println("decrypt message");
+    uint8_t decrypted[58]; // Assuming size 58 for compatibility with your previous code
+
+    cipherBlock.decryptBlock(decrypted, gotText);
+
+    Serial.println("decrypted message should be : Hello, AES256!");
+    for (int i = 0; i < 57; i++) {
+        Serial.print((char)decrypted[i]); // Print each character of the decrypted message
+    }
+    Serial.println("\n");
+    static char decrypted_char[58]; // Assuming size 58 for compatibility
+    for (int i = 0; i < 57; i++) {
+        decrypted_char[i] = (char)decrypted[i];
+    }
+    decrypted_char[57] = '\0'; // Null-terminate the string
+    return decrypted_char;
 }
 
 
@@ -72,13 +173,23 @@ void handlePairing(Packet& packet) {
         Serial.print("Received pairing request from ");
         Serial.println(packet.addressFrom);
 
+        generate_keys();
         // generate public and private keys
         // maybe need convert key to string
-        ...
-
+        //convertion
+        
+        // Create a char array to hold the string
+        char publicKeyHubString[33]; // +1 for null terminator
+        
+        // Copy the contents of publicKeyHub to publicKeyHubString
+        for (int i = 0; i < 32; i++) {
+            publicKeyHubString[i] = static_cast<char>(publicKeyHub[i]);
+        }
+        publicKeyHubString[32] = '\0'; // Null terminate the char array
+        
         // send public key to sensor
         Packet responsePacket;
-        createPacket(responsePacket, HEADER_PAIRING_RESPONSE, packet.addressFrom, SERVER_ADDRESS, publicKeyHub);
+        createPacket(responsePacket, HEADER_PAIRING_RESPONSE, packet.addressFrom, SERVER_ADDRESS, publicKeyHubString);
         uint8_t buffer[sizeof(Packet)];
         memcpy(buffer, &responsePacket, sizeof(Packet));
         LoRa.beginPacket();
@@ -104,13 +215,18 @@ void handlePairing(Packet& packet) {
             Serial.println(receivedPacket.addressFrom);
 
             // save public key
-            ...
-            // combine keys and creating hash
-            ...
+            char* receivedPublicKey = receivedPacket.message;
+            Serial.println("Received public key from server");
+            Serial.println(receivedPublicKey);
 
+            // combine keys and creating hash
+            mix_key(receivedPublicKey);
+            hash_key();
+            
             // send encrypted hello
+            uint8_t* cipherText = encode_message("Hello, AES256!");
             Packet pairingPacket;
-            createPacket(pairingPacket, HEADER_ENCRYPTED_HELLO, receivedPacket.addressFrom, SERVER_ADDRESS, "Hello");
+            createPacket(pairingPacket, HEADER_ENCRYPTED_HELLO, receivedPacket.addressFrom, SERVER_ADDRESS, (char*)cipherText);
             uint8_t buffer[sizeof(Packet)];
             memcpy(buffer, &pairingPacket, sizeof(Packet));
             LoRa.beginPacket();
@@ -119,40 +235,28 @@ void handlePairing(Packet& packet) {
             }
             LoRa.endPacket();
             delay(2000); // Wait for response 2 seconds
+
+//            // write to SPIFFS
+//            SensorStruct info;
+//            memcpy(info.hashedKey, hashedKey, sizeof(hashedKey));
+//        
+//            dataSPIFFS[receivedPacket.addressFrom] = info;
+//        
+//            // Write to file in SPIFFS (assuming writeFile and appendFile functions are correctly implemented)
+//            String path = "/" + String(receivedPacket.addressFrom);
+//            writeFile(SPIFFS, path.c_str(), info);
+//            appendFile(SPIFFS, path.c_str(), "\n");
+//        
+//        
+//            // then add sensor option
+//            // got from sensor with header 160
+//              }
+//            }
+
         }
     }
 
-    // third step
-    // receive encrypted hello
-    int packetSize = LoRa.parsePacket();
-    if (packetSize == sizeof(Packet)) {
-        Packet receivedPacket;
-        uint8_t buffer[sizeof(Packet)];
-        for (int i = 0; i < sizeof(Packet); ++i) {
-            buffer[i] = LoRa.read();
-        }
-        parsePacket(buffer, receivedPacket);
-        // maybe need some check
-        if (receivedPacket.header == HEADER_ENCRYPTED_HELLO) {
-            Serial.print("Received encrypted hello from ");
-            Serial.println(receivedPacket.addressFrom);
-            Serial.print("Message: ");
-            Serial.println(receivedPacket.message);
-        }
-
-        // write to SPIFFS
-        SensorStruct info;
-        info.hashedKey = hashedKey; // got and store earlier // Natalia part
-        dataSPIFFS[] = info;
-
-        // Write to file in SPIFFS (assuming writeFile and appendFile functions are correctly implemented)
-        String path = "/" + String(receivedPacket.addressFrom);
-        writeFile(SPIFFS, path.c_str(), info);
-        appendFile(SPIFFS, path.c_str(), "\n");
-    }
-
-    // then add sensor option
-    // got from sensor with header 160
+    
 
 }
 
@@ -199,7 +303,9 @@ void writeFile(fs::FS &fs, const char * path, SensorStruct sensor){
         Serial.println("- failed to open file for writing");
         return;
     }
-    if(file.print(sensor.hashedKey.c_str())){
+    String hashedKeyString(reinterpret_cast<char*>(sensor.hashedKey));
+
+    if (file.print(hashedKeyString)) {
         Serial.println("- file written");
     } else {
         Serial.println("- write failed");
@@ -247,11 +353,21 @@ void readFiles(fs::FS &fs, File root) {
             uint16_t address = addressString.toInt();
 
             SensorStruct sensor;
-            sensor.hashedKey = file.readStringUntil('\n').c_str();
+
+            String hashedKeyString = file.readStringUntil('\n');
+            if (hashedKeyString.length() >= 32) {
+                for (int i = 0; i < 32; i++) {
+                    sensor.hashedKey[i] = (uint8_t)hashedKeyString.charAt(i);
+                }
+            }
+
             Serial.print("Address: ");
             Serial.println(address);
             Serial.print("Hashed key: ");
-            Serial.println(sensor.hashedKey.c_str());
+            for (int i = 0; i < 32; i++) {
+                Serial.print(sensor.hashedKey[i], HEX); // Print each byte of the hashed key in hexadecimal format
+            }
+            Serial.println();
 
             dataSPIFFS[address] = sensor;
         }
@@ -260,14 +376,18 @@ void readFiles(fs::FS &fs, File root) {
     }
 }
 void parseInfoMessage(const char* message, uint16_t addressFrom) {
-    std::stringstream ss(message);
-    std::string token;
+//    std::stringstream ss(message);
+//    std::string token;
+//    SensorStruct info;
+//
+//    // Read sensor name
+//    std::getline(ss, token, ',');
+//
+//    info.hashedKey = token;
+
     SensorStruct info;
+    memcpy(info.hashedKey, hashedKey, sizeof(hashedKey));
 
-    // Read sensor name
-    std::getline(ss, token, ',');
-
-    info.hashedKey = token;
 
     // Add to sensor map
     dataSPIFFS[addressFrom] = info;
@@ -318,14 +438,34 @@ void loop() {
             if (receivedPacket.magicByte == 50) { // Check if it's our protocol
                 if (receivedPacket.header == HEADER_PAIRING_REQUEST) { // Pairing header
                     handlePairing(receivedPacket);
+                    parseInfoMessage(receivedPacket.message, receivedPacket.addressFrom);
                 } else {
+                    // decrypt message
+                    // Assuming receivedPacket.message is a null-terminated char array
+
+                    // Calculate the length of the char array
+                    size_t messageLength = strlen(receivedPacket.message);
+                    
+                    // Allocate memory for the uint8_t array (plus one for the null terminator)
+                    uint8_t* uintMessage = new uint8_t[messageLength + 1];
+                    
+                    // Copy the characters from receivedPacket.message to uintMessage
+                    for (size_t i = 0; i <= messageLength; ++i) {
+                        uintMessage[i] = static_cast<uint8_t>(receivedPacket.message[i]);
+                    }
+                    
+                    // Pass uintMessage to decrypt_message
+                    char* decryptedMessage = decrypt_message(uintMessage);
+                    
+                    // Don't forget to free the allocated memory when you're done
+                    delete[] uintMessage;
+
                     Serial.print("Received message: ");
-                    Serial.println(receivedPacket.message);
+                    Serial.println(decryptedMessage);
                     Serial.print("From: ");
                     Serial.println(receivedPacket.addressFrom);
                 }
             }
         }
-
     }
 }
