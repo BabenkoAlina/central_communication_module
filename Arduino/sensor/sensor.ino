@@ -54,7 +54,7 @@ uint8_t decryptedData[32];
 AES256 cipherBlock;
 SHA3_256 sha3;
 
-int gpioPin = 1;
+int gpioPin = 0;
 
 struct Packet {
     uint8_t magicByte;
@@ -204,63 +204,76 @@ void handlePairing() {
 
     // придумати де взяти адресу сервера!!!!!!!!!
     // broadcast
-    Packet packet;
-    createPacket(packet, HEADER_PAIRING_REQUEST, 0xFFFF, SENSOR_ADDRESS, "Requesting pairing");
-    LoRa.beginPacket();
-    LoRa.write((uint8_t*)&packet, sizeof(Packet));
-    LoRa.endPacket();
-    delay(2000); // Wait for response 2 seconds
+//    while (true) {
+        Serial.println("Sending broadcast request");
+        Packet packet;
+        createPacket(packet, HEADER_PAIRING_REQUEST, 0xFFFF, SENSOR_ADDRESS, "Requesting pairing");
+        LoRa.beginPacket();
+        LoRa.write((uint8_t*)&packet, sizeof(Packet));
+        LoRa.endPacket();
+        Serial.println("Send broadcast request");
+        delay(2000); // Wait for response 2 seconds
 
+        // second step
+        // pair procedure
 
-    // second step
-    // pair procedure
+        // get public key from server
+        Serial.println("getting responce from hub");
+        int packetSize = LoRa.parsePacket();
+        if (packetSize == sizeof(Packet)) {
+            Packet receivedPacket;
+            uint8_t buffer[sizeof(Packet)];
+            for (int i = 0; i < sizeof(Packet); ++i) {
+                buffer[i] = LoRa.read();
+            }
+            parsePacket(buffer, receivedPacket);
+            // check if my address or broadcast
+            if (receivedPacket.addressTo == SENSOR_ADDRESS) {
+                if (receivedPacket.magicByte == 50) { // Check if it's our protocol
+                    if (receivedPacket.header == HEADER_PAIRING_RESPONSE) { // Pairing header
+                        char* receivedPublicKey = receivedPacket.message;
+                        Serial.println("Received public key from server");
+                        Serial.println(receivedPublicKey);
+                        serverAddress = receivedPacket.addressFrom;
+                        
+                        generate_keys();
+                        delay(5000);
+                        Serial.println("generated keys");
+                        // generate public and private keys
+                        // maybe need convert key to string
+                        //convertion
+                        
+                        char publicKeySensorString[33]; // +1 for null terminator
 
-    // get public key from server
-    int packetSize = LoRa.parsePacket();
-    if (packetSize == sizeof(Packet)) {
-        Packet receivedPacket;
-        uint8_t buffer[sizeof(Packet)];
-        for (int i = 0; i < sizeof(Packet); ++i) {
-            buffer[i] = LoRa.read();
-        }
-        parsePacket(buffer, receivedPacket);
-        // check if my address or broadcast
-        if (receivedPacket.addressTo == SENSOR_ADDRESS) {
-            if (receivedPacket.magicByte == 50) { // Check if it's our protocol
-                if (receivedPacket.header == HEADER_PAIRING_RESPONSE) { // Pairing header
-                    char* receivedPublicKey = receivedPacket.message;
-                    Serial.println("Received public key from server");
-                    Serial.println(receivedPublicKey);
-                    serverAddress = receivedPacket.addressFrom;
+                        // Copy the contents of publicKeyHub to publicKeyHubString
+                        for (int i = 0; i < 32; i++) {
+                            publicKeySensorString[i] = static_cast<char>(publicKeySensor[i]);
+                        }
+                        publicKeySensorString[32] = '\0'; // Null terminate the char array
 
-                    generate_keys();
-                    // generate public and private keys
-                    // maybe need convert key to string
-                    //convertion
-                    char publicKeySensorString[33]; // +1 for null terminator
-        
-                    // Copy the contents of publicKeyHub to publicKeyHubString
-                    for (int i = 0; i < 32; i++) {
-                        publicKeySensorString[i] = static_cast<char>(publicKeySensor[i]);
-                    }
-                    publicKeySensorString[32] = '\0'; // Null terminate the char array
+                        // send public key to server
+                        Packet responsePacket;
+                        createPacket(responsePacket, HEADER_PAIRING_PROCEDURE, serverAddress, SENSOR_ADDRESS,
+                                     publicKeySensorString);
+                        uint8_t buffer[sizeof(Packet)];
+                        memcpy(buffer, &responsePacket, sizeof(Packet));
+                        LoRa.beginPacket();
+                        for (int i = 0; i < sizeof(Packet); ++i) {
+                            LoRa.write(buffer[i]);
+                        }
+                        LoRa.endPacket();
+                        delay(2000); // Wait for response 2 seconds
+                        Serial.println("send own key");
 
-                    // send public key to server
-                    Packet responsePacket;
-                    createPacket(responsePacket, HEADER_PAIRING_PROCEDURE, serverAddress, SENSOR_ADDRESS,
-                                 publicKeySensorString);
-                    uint8_t buffer[sizeof(Packet)];
-                    memcpy(buffer, &responsePacket, sizeof(Packet));
-                    LoRa.beginPacket();
-                    for (int i = 0; i < sizeof(Packet); ++i) {
-                        LoRa.write(buffer[i]);
-                    }
-                    LoRa.endPacket();
-                    delay(2000); // Wait for response 2 seconds
-
-                    // mix keys
-                    mix_key(receivedPublicKey);
-                    hash_key();
+                        // mix keys
+                        mix_key(receivedPublicKey);
+                        delay(5000);
+                        Serial.println("mixed keys");
+                        hash_key();
+                        delay(5000);
+                        Serial.println("hashed keys");
+//                        break;
+//                    }
                 }
             }
         }
@@ -298,6 +311,7 @@ void handlePairing() {
                 Serial.println("Decrypted message is incorrect");
             }
         }
+        Serial.println("received hello");
 
         // MAYBE ONCE I WILL MAKE IT
         //send inform message
@@ -316,6 +330,7 @@ void handlePairing() {
 //        delay(2000); // Wait for response 2 seconds
     }
     // write to EEPROM
+    Serial.println("started writing eeprom");
     EEPROM.write(SERVER_ADDRESS, serverAddress >> 8);
     EEPROM.write(SERVER_ADDRESS + 1, serverAddress & 0xFF);
 
@@ -324,7 +339,7 @@ void handlePairing() {
     }
 
     EEPROM.write(IS_PAIRED_ADDRESS, Paired);
-
+    Serial.println("ended writing eeprom");
     Serial.println("Device paired successfully.");
 }
 
@@ -338,38 +353,52 @@ void setup() {
         while (1);
     }
 
-    isPaired = EEPROM.read(IS_PAIRED_ADDRESS);
-    if (isPaired == notPaired) {
-        Serial.println("I am ready for pairing!");
-        handlePairing();
-    } else {
-        pinMode(gpioPin, INPUT);
-        int state = digitalRead(gpioPin);
-        for (int i = 0; i < 100; ++i) {
-            if (state == HIGH) {
-                Serial.println("GPIO1 is HIGH. Read the address");
-            } else {
-                break;
-            }
-            delay(30);
-            if (i == 99) {
-                handlePairing();
-            }
-        }
+    readEEPROM();
+//    isPaired = EEPROM.read(IS_PAIRED_ADDRESS);
+//    if (isPaired == notPaired) {
+//        Serial.println("I am ready for pairing!");
+//        handlePairing();
+//    }
+//    } else {
+//        pinMode(gpioPin, INPUT);
+//        int state = digitalRead(gpioPin);
+//        for (int i = 0; i < 100; ++i) {
+//            if (state == HIGH) {
+//                Serial.println("GPIO1 is HIGH. Read the address");
+//            } else {
+//                break;
+//            }
+//            delay(30);
+//            if (i == 99) {
+//                handlePairing();
+//            }
+//        }
 
         readEEPROM();
     }
 }
 
 void loop() {
-    Packet packet;
-    // encrypt message
-    char message[] = "Hello, AES256!";
-    uint8_t* cipherText = encode_message(message);
-    char* cipherTextChar = reinterpret_cast<char*>(cipherText);
-    createPacket(packet, HEADER_MESSAGE, serverAddress, SENSOR_ADDRESS, cipherTextChar);
-    LoRa.beginPacket();
-    LoRa.write((uint8_t*)&packet, sizeof(Packet));
-    LoRa.endPacket();
-    delay(1000); // Send message every second
+//    Packet packet;
+//    // encrypt message
+//    char message[] = "Hello, AES256!";
+//    uint8_t* cipherText = encode_message(message);
+//    char* cipherTextChar = reinterpret_cast<char*>(cipherText);
+//    createPacket(packet, HEADER_MESSAGE, serverAddress, SENSOR_ADDRESS, cipherTextChar);
+//    LoRa.beginPacket();
+//    LoRa.write((uint8_t*)&packet, sizeof(Packet));
+//    LoRa.endPacket();
+//    delay(1000); // Send message every second
+//  Packet packet;
+//  Serial.println("sending");
+//  createPacket(packet, HEADER_MESSAGE, 0xFFFF, SERVER_ADDRESS, "Hello, world!");
+//  uint8_t buffer[sizeof(Packet)];
+//  memcpy(buffer, &packet, sizeof(Packet));
+//  LoRa.beginPacket();
+//  for (int i = 0; i < sizeof(Packet); ++i) {
+//      LoRa.write(buffer[i]);
+//  }
+//  LoRa.endPacket();
+//  Serial.println("sent");
+//  delay(2000);
 }

@@ -174,6 +174,7 @@ void handlePairing(Packet& packet) {
         Serial.println(packet.addressFrom);
 
         generate_keys();
+        delay(1000);
         // generate public and private keys
         // maybe need convert key to string
         //convertion
@@ -189,6 +190,7 @@ void handlePairing(Packet& packet) {
         
         // send public key to sensor
         Packet responsePacket;
+        Serial.println("created packet 1");
         createPacket(responsePacket, HEADER_PAIRING_RESPONSE, packet.addressFrom, SERVER_ADDRESS, publicKeyHubString);
         uint8_t buffer[sizeof(Packet)];
         memcpy(buffer, &responsePacket, sizeof(Packet));
@@ -197,12 +199,14 @@ void handlePairing(Packet& packet) {
             LoRa.write(buffer[i]);
         }
         LoRa.endPacket();
+        Serial.println("sent packet 1");
         delay(2000); // Wait for response 2 seconds
     }
 
     // second step
     // receive public key from sensor
     int packetSize = LoRa.parsePacket();
+    Serial.println("trying to get packet 2");
     if (packetSize == sizeof(Packet)) {
         Packet receivedPacket;
         uint8_t buffer[sizeof(Packet)];
@@ -210,6 +214,7 @@ void handlePairing(Packet& packet) {
             buffer[i] = LoRa.read();
         }
         parsePacket(buffer, receivedPacket);
+        Serial.println("before pairing procedure");
         if (receivedPacket.header == HEADER_PAIRING_PROCEDURE) {
             Serial.print("Received pairing response from ");
             Serial.println(receivedPacket.addressFrom);
@@ -221,9 +226,12 @@ void handlePairing(Packet& packet) {
 
             // combine keys and creating hash
             mix_key(receivedPublicKey);
+            delay(5000);
             hash_key();
+            delay(5000);
             
             // send encrypted hello
+            Serial.println("created packet 2");
             uint8_t* cipherText = encode_message("Hello, AES256!");
             Packet pairingPacket;
             createPacket(pairingPacket, HEADER_ENCRYPTED_HELLO, receivedPacket.addressFrom, SERVER_ADDRESS, (char*)cipherText);
@@ -234,6 +242,7 @@ void handlePairing(Packet& packet) {
                 LoRa.write(buffer[i]);
             }
             LoRa.endPacket();
+            Serial.println("sent packet 2");
             delay(2000); // Wait for response 2 seconds
 
 //            // write to SPIFFS
@@ -421,51 +430,56 @@ void setup() {
     listDir(SPIFFS, "/", 0);
     File root = SPIFFS.open("/");
     readFiles(SPIFFS, root);
+    deleteFile(SPIFFS, "/0");
     root.close();
 }
 
 void loop() {
-    int packetSize = LoRa.parsePacket();
-    if (packetSize == sizeof(Packet)) {
-        Packet receivedPacket;
-        uint8_t buffer[sizeof(Packet)];
-        for (int i = 0; i < sizeof(Packet); ++i) {
-            buffer[i] = LoRa.read();
-        }
-        parsePacket(buffer, receivedPacket);
-        // check if my address or broadcast
-        if (receivedPacket.addressTo == SERVER_ADDRESS || receivedPacket.addressTo == 0xFFFF) {
-            if (receivedPacket.magicByte == 50) { // Check if it's our protocol
-                if (receivedPacket.header == HEADER_PAIRING_REQUEST) { // Pairing header
-                    handlePairing(receivedPacket);
-                    parseInfoMessage(receivedPacket.message, receivedPacket.addressFrom);
-                } else {
-                    // decrypt message
-                    // Assuming receivedPacket.message is a null-terminated char array
-
-                    // Calculate the length of the char array
-                    size_t messageLength = strlen(receivedPacket.message);
-                    
-                    // Allocate memory for the uint8_t array (plus one for the null terminator)
-                    uint8_t* uintMessage = new uint8_t[messageLength + 1];
-                    
-                    // Copy the characters from receivedPacket.message to uintMessage
-                    for (size_t i = 0; i <= messageLength; ++i) {
-                        uintMessage[i] = static_cast<uint8_t>(receivedPacket.message[i]);
-                    }
-                    
-                    // Pass uintMessage to decrypt_message
-                    char* decryptedMessage = decrypt_message(uintMessage);
-                    
-                    // Don't forget to free the allocated memory when you're done
-                    delete[] uintMessage;
-
-                    Serial.print("Received message: ");
-                    Serial.println(decryptedMessage);
-                    Serial.print("From: ");
-                    Serial.println(receivedPacket.addressFrom);
-                }
-            }
-        }
-    }
+//    Serial.println("Waiting for message");
+//    int packetSize = LoRa.parsePacket();
+//    if (packetSize == sizeof(Packet)) {
+//        Packet receivedPacket;
+//        uint8_t buffer[sizeof(Packet)];
+//        for (int i = 0; i < sizeof(Packet); ++i) {
+//            buffer[i] = LoRa.read();
+//        }
+//        parsePacket(buffer, receivedPacket);
+//        Serial.print("receivedPacket.addressFrom: ");
+//        Serial.println(receivedPacket.addressFrom);
+//        // check if my address or broadcast
+//        if (receivedPacket.addressTo == SERVER_ADDRESS || receivedPacket.addressTo == 0xFFFF) {
+//            if (receivedPacket.magicByte == 50) { // Check if it's our protocol
+//                if (receivedPacket.header == HEADER_PAIRING_REQUEST) { // Pairing header
+//                    handlePairing(receivedPacket);
+//                    parseInfoMessage(receivedPacket.message, receivedPacket.addressFrom);
+//                } else {
+//                    // decrypt message
+//                    // Assuming receivedPacket.message is a null-terminated char array
+//
+//                    // Calculate the length of the char array
+//                    size_t messageLength = strlen(receivedPacket.message);
+//                    
+//                    // Allocate memory for the uint8_t array (plus one for the null terminator)
+//                    uint8_t* uintMessage = new uint8_t[messageLength + 1];
+//                    
+//                    // Copy the characters from receivedPacket.message to uintMessage
+//                    for (size_t i = 0; i <= messageLength; ++i) {
+//                        uintMessage[i] = static_cast<uint8_t>(receivedPacket.message[i]);
+//                    }
+//                    
+//                    // Pass uintMessage to decrypt_message
+//                    char* decryptedMessage = decrypt_message(uintMessage);
+//                    
+//                    // Don't forget to free the allocated memory when you're done
+//                    delete[] uintMessage;
+//
+//                    Serial.print("Received message: ");
+//                    Serial.println(decryptedMessage);
+//                    Serial.print("From: ");
+//                    Serial.println(receivedPacket.addressFrom);
+//                }
+//            }
+//        }
+//    }
+//    delay(100);
 }
