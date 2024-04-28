@@ -210,9 +210,9 @@ void handlePairing() {
                 serverAddress = receivedPacket.addressFrom;
 
                 Serial.println("Received public key");
-                encode_base64(receivedPublicKey, 32, base64_buffer);
-                Serial.println((char *) base64_buffer);
-                Serial.print("\n");
+                for (uint8_t elem : receivedPublicKey) {
+                    Serial.print(elem, HEX);
+                }
                 break;
             }
         }
@@ -248,11 +248,9 @@ void handlePairing() {
             Serial.println("before pairing procedure");
             if (receivedPacket.addressTo == SERVER_ADDRESS && receivedPacket.header == HEADER_ENCRYPTED_HELLO &&
                 receivedPacket.magicByte == 50) {
-                uint8_t decrypted = decrypt_message(receivedPacket.message);
-                if (decrypted ==  "Hello, AES256!") {
-                    Serial.println("Decrypted message is correct");
-                } else {
-                    Serial.println("Decrypted message is incorrect");
+                uint8_t *decrypted = decrypt_message(receivedPacket.message);
+                for (int i = 0; i < 57; i++) {
+                    Serial.print((char) decrypted[i]);
                 }
                 break;
             }
@@ -281,7 +279,7 @@ void handlePairing() {
         LoRa.endPacket();
     }
 
-    writeEEPROM();
+//    writeEEPROM();
 }
 
 
@@ -314,7 +312,7 @@ void setup() {
                 handlePairing();
             }
         }
-        readEEPROM();
+//        readEEPROM();
     }
 }
 
@@ -324,7 +322,11 @@ void loop() {
     uint8_t* cipherText = encode_message(message);
     createPacket(packet, HEADER_MESSAGE, serverAddress, SENSOR_ADDRESS, cipherText);
     uint8_t buffer[sizeof(Packet)];
-    LoRa.beginPacket();
+    memcpy(buffer, &packet, sizeof(Packet));
+
+    int a = LoRa.beginPacket();
+    Serial.println(a);
+
     for (int i = 0; i < sizeof(Packet); ++i) {
         LoRa.write(buffer[i]);
     }

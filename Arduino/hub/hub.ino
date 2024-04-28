@@ -324,9 +324,9 @@ void handlePairing(Packet& packet) {
                 memcpy(receivedPublicKey, receivedPacket.message, 32);
 
                 Serial.println("Received public key");
-                encode_base64(receivedPublicKey, 32, base64_buffer);
-                Serial.println((char *) base64_buffer);
-                Serial.print("\n");
+                for (uint8_t elem : receivedPublicKey) {
+                    Serial.print(elem, HEX);
+                }
                 break;
             }
         }
@@ -367,11 +367,11 @@ void handlePairing(Packet& packet) {
             if (receivedPacket.addressTo == SERVER_ADDRESS && receivedPacket.header == HEADER_INFORMAL_MESSAGE && receivedPacket.magicByte == 50) {
 
                 Serial.println("sensor info:");
-                encode_base64(receivedPacket.message, 32, base64_buffer);
-                Serial.println((char *) base64_buffer);
-                Serial.print("\n");
+                for (int i = 0; i < 57; i++) {
+                    Serial.print((char) receivedPacket.message[i]);
+                }
 
-                writeSPIFFS(receivedPacket.message, sensorAddress);
+//                writeSPIFFS(receivedPacket.message, sensorAddress);
                 break;
             }
         }
@@ -398,12 +398,12 @@ void setup() {
         Serial.println("An Error has occurred while mounting SPIFFS");
         return;
     }
-    listDir(SPIFFS, "/", 0);
-    File root = SPIFFS.open("/");
-    readFiles(SPIFFS, root);
+//    listDir(SPIFFS, "/", 0);
+//    File root = SPIFFS.open("/");
+//    readFiles(SPIFFS, root);
 //    deleteFile(SPIFFS, "/1");
 //    listDir(SPIFFS, "/", 0);
-    root.close();
+//    root.close();
 }
 
 void loop() {
@@ -424,9 +424,9 @@ void loop() {
                 } else {
                     uint8_t* decryptedMessage = decrypt_message(receivedPacket.message);
 
-                    encode_base64(decryptedMessage, 32, base64_buffer);
-                    Serial.println((char *) base64_buffer);
-                    Serial.print("\n");
+                    for (int i = 0; i < sizeof(decryptedMessage); ++i) {
+                        Serial.print((char)decryptedMessage[i]);
+                    }
                 }
             }
         }
