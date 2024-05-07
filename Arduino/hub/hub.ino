@@ -81,12 +81,15 @@ void setup() {
     Serial.begin(9600);
 //  (int ss, int reset, int dio0)
     LoRa.setPins(2, 32, 33);
+    // Enable LoRa CRC
+    
     while (!Serial);
     Serial.println("ESP32 Hub");
     if (!LoRa.begin(433E6)) {
         Serial.println("Starting LoRa failed!");
         while (1);
     }
+    LoRa.enableCrc();
 }
 
 void loop() {
@@ -101,5 +104,6 @@ void loop() {
         for (int i = 0; i < sizeof(receivedPacket.message); ++i) {
             Serial.print((char)receivedPacket.message[i]);
         }
+        Serial.println();
     }
 }

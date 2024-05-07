@@ -67,7 +67,7 @@ void createPacket(Packet& packet, uint8_t header, uint16_t addressTo, uint16_t a
     packet.header = header;
     packet.addressTo = addressTo;
     packet.addressFrom = addressFrom;
-    memcpy(packet.message, message, 58);
+    strncpy((char*)packet.message, message, sizeof(packet.message));
 }
 
 
@@ -78,12 +78,15 @@ void parsePacket(const uint8_t* buffer, Packet& packet) {
 void setup() {
     Serial.begin(9600);
     LoRa.setPins(10, 8, 9);
+    // Enable LoRa CRC
+    
     while (!Serial);
-    Serial.println("LoRa Receiver");
+    Serial.println("LoRa Sensor");
     if (!LoRa.begin(433E6)) {
         Serial.println("Starting LoRa failed!");
         while (1);
     }
+    LoRa.enableCrc();
 }
 
 void loop() {
