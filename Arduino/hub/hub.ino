@@ -292,6 +292,7 @@ void writeSPIFFS(const uint8_t* message, uint16_t sensorAddress) {
 
 void handlePairing(Packet& packet) {
     uint16_t sensorAddress = packet.addressFrom;
+    Serial.println(sensorAddress);
 
     uint8_t receivedPublicKey[32];
 
@@ -308,6 +309,7 @@ void handlePairing(Packet& packet) {
         LoRa.beginPacket();
         for (int i = 0; i < sizeof(Packet); ++i) {
             LoRa.write(buffer[i]);
+//            Serial.println(buffer[i]);
         }
         LoRa.endPacket();
 
