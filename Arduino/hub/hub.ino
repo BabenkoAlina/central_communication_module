@@ -298,7 +298,9 @@ void handlePairing(Packet& packet) {
     // sending key //////////////////////////////////////////////////////
     Serial.println("Sending key to sensor");
     generate_keys();
+    delay(1000);
     while (true) {
+        Serial.println("trying to send key");
         Packet responsePacket;
         createPacket(responsePacket, HEADER_PAIRING_RESPONSE, sensorAddress, SERVER_ADDRESS, publicKeyHub);
         uint8_t buffer[sizeof(Packet)];
@@ -393,7 +395,7 @@ void setup() {
         Serial.println("Starting LoRa failed!");
         while (1);
     }
-
+    LoRa.enableCrc();
     if (!SPIFFS.begin(true)) {
         Serial.println("An Error has occurred while mounting SPIFFS");
         return;

@@ -198,6 +198,7 @@ void handlePairing() {
         Serial.println("Getting response");
         int packetSize = LoRa.parsePacket();
         if (packetSize == sizeof(Packet)) {
+            Serial.println("got some");
             Packet receivedPacket;
             uint8_t buffer[sizeof(Packet)];
             for (int i = 0; i < sizeof(Packet); ++i) {
@@ -292,6 +293,7 @@ void setup() {
         Serial.println("Starting LoRa failed!");
         while (1);
     }
+    LoRa.enableCrc();
 //    readEEPROM();
 //    EEPROM.write(0,32);
     isPaired = EEPROM.read(IS_PAIRED_ADDRESS);
