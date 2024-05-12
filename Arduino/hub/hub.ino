@@ -52,7 +52,7 @@ uint8_t combinedKey[32];
 uint8_t hashedKey[32];
 
 const char* ssid = "WIFI-UCU";  // WiFi (network) name
-const char* password = "Eo*ri22060";  // Your WiFi password
+const char* password = "password";  // Your WiFi password
 const char* serverUrl = "http://server_ip:8080/data";  // Change to your server's IP and port
 
 AES256 cipherBlock;
