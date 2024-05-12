@@ -67,7 +67,13 @@ void createPacket(Packet& packet, uint8_t header, uint16_t addressTo, uint16_t a
     packet.header = header;
     packet.addressTo = addressTo;
     packet.addressFrom = addressFrom;
-    memcpy(packet.message, message, 58);
+    
+    // Ensure message is null-terminated
+    uint8_t messageBuffer[sizeof(packet.message)];
+    memset(messageBuffer, 0, sizeof(messageBuffer));
+    memcpy(messageBuffer, message, sizeof(messageBuffer) - 1); // Copy message, leaving space for null-terminator
+    
+    strncpy((char*)packet.message, (const char*)messageBuffer, sizeof(packet.message));
 }
 
 
@@ -183,27 +189,30 @@ void handlePairing() {
     uint8_t receivedPublicKey[32];
     while (true) {
         // broadcast request /////////////////////////////////////////////
+        uint8_t message[]= "Requesting pairing";
         Serial.println("Sending broadcast request");
         Packet packet;
-        createPacket(packet, HEADER_PAIRING_REQUEST, 0xFFFF, SENSOR_ADDRESS, reinterpret_cast<const uint8_t*>("Requesting pairing"));
+        createPacket(packet, HEADER_PAIRING_REQUEST, 0xFFFF, SENSOR_ADDRESS, message);
         uint8_t buffer[sizeof(Packet)];
         memcpy(buffer, &packet, sizeof(Packet));
         LoRa.beginPacket();
-        for (int i = 0; i < sizeof(Packet); ++i) {
-            LoRa.write(buffer[i]);
-        }
+        LoRa.write(buffer, sizeof(Packet));
         LoRa.endPacket();
 
         // get key ///////////////////////////////////////////////////////
         Serial.println("Getting response");
+        delay(2000);
         int packetSize = LoRa.parsePacket();
-        if (packetSize == sizeof(Packet)) {
+        Serial.println(packetSize);
+        if (packetSize >0 && packetSize<=sizeof(Packet)) {
             Serial.println("got some");
             Packet receivedPacket;
             uint8_t buffer[sizeof(Packet)];
-            for (int i = 0; i < sizeof(Packet); ++i) {
-                buffer[i] = LoRa.read();
-            }
+            // for (int i = 0; i < sizeof(Packet); ++i) {
+            //     buffer[i] = LoRa.read();
+            // }
+            LoRa.readBytes(buffer, packetSize);
+
             parsePacket(buffer, receivedPacket);
             if (receivedPacket.addressTo == SENSOR_ADDRESS && receivedPacket.header == HEADER_PAIRING_RESPONSE &&
                 receivedPacket.magicByte == 50) {
