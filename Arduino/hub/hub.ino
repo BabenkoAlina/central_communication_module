@@ -26,6 +26,9 @@
 #include <AES.h>
 #include <base64.hpp>
 
+#include <WiFi.h>
+#include <HTTPClient.h>
+
 #define SERVER_ADDRESS 0x00
 
 #define HEADER_PAIRING_REQUEST 1
@@ -48,6 +51,9 @@ uint8_t publicKeyHub[32];
 uint8_t combinedKey[32];
 uint8_t hashedKey[32];
 
+const char* ssid = "WIFI-UCU";  // WiFi (network) name
+const char* password = "Eo*ri22060";  // Your WiFi password
+const char* serverUrl = "http://server_ip:8080/data";  // Change to your server's IP and port
 
 AES256 cipherBlock;
 SHA3_256 sha3;
@@ -387,6 +393,14 @@ void handlePairing(Packet& packet) {
 
 void setup() {
     Serial.begin(9600);
+    WiFi.begin(ssid, password);//wifi connection start
+
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.println("Connecting to WiFi...");
+    }
+
+    Serial.println("Connected to WiFi");//wifi con. end
 //  (int ss, int reset, int dio0)
     LoRa.setPins(2, 32, 33);
     while (!Serial);
@@ -429,9 +443,30 @@ void loop() {
                     for (int i = 0; i < sizeof(decryptedMessage); ++i) {
                         Serial.print((char)decryptedMessage[i]);
                     }
+                    //part for server 
+                    if (WiFi.status() == WL_CONNECTED) {
+                        HTTPClient http;
+                        http.begin(serverUrl);
+                        http.addHeader("Content-Type", "application/json");
+
+                        String jsonData = "{\"sensorData_or_name\": \"value_here\"}";// Construct JSON data
+
+                        int httpResponseCode = http.POST(jsonData);
+                        if (httpResponseCode > 0) {
+                            String response = http.getString();
+                            Serial.println(response);
+                        } else {
+                            Serial.print("Error on sending POST: ");
+                            Serial.println(httpResponseCode);
+                        }
+
+                        http.end();
+                    }
+                    
                 }
             }
         }
+        
     }
-    delay(100);
+    delay(1000);
 }
