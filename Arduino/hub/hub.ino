@@ -68,8 +68,15 @@ void createPacket(Packet& packet, uint8_t header, uint16_t addressTo, uint16_t a
     packet.header = header;
     packet.addressTo = addressTo;
     packet.addressFrom = addressFrom;
-    memcpy(packet.message, message, 58);
+
+    // Ensure message is null-terminated
+    uint8_t messageBuffer[sizeof(packet.message)];
+    memset(messageBuffer, 0, sizeof(messageBuffer));
+    memcpy(messageBuffer, message, sizeof(messageBuffer) - 1); // Copy message, leaving space for null-terminator
+
+    strncpy((char*)packet.message, (const char*)messageBuffer, sizeof(packet.message));
 }
+
 
 void parsePacket(const uint8_t* buffer, Packet& packet) {
     memcpy(&packet, buffer, sizeof(Packet));
@@ -292,13 +299,14 @@ void writeSPIFFS(const uint8_t* message, uint16_t sensorAddress) {
 
 void handlePairing(Packet& packet) {
     uint16_t sensorAddress = packet.addressFrom;
+    Serial.println(sensorAddress);
 
     uint8_t receivedPublicKey[32];
 
     // sending key //////////////////////////////////////////////////////
     Serial.println("Sending key to sensor");
     generate_keys();
-    delay(1000);
+//    delay(1000);
     while (true) {
         Serial.println("trying to send key");
         Packet responsePacket;
@@ -306,9 +314,17 @@ void handlePairing(Packet& packet) {
         uint8_t buffer[sizeof(Packet)];
         memcpy(buffer, &responsePacket, sizeof(Packet));
         LoRa.beginPacket();
+//        for (int i = 0; i < sizeof(Packet); ++i) {
+//            LoRa.write(buffer[i]);
+////            Serial.println(buffer[i]);
+//        }
+        LoRa.write(buffer, sizeof(Packet));
         for (int i = 0; i < sizeof(Packet); ++i) {
-            LoRa.write(buffer[i]);
+            Serial.print(buffer[i]);
         }
+        Serial.println();
+        
+        
         LoRa.endPacket();
 
         // receive public key from sensor //////////////////////////////////
@@ -411,13 +427,18 @@ void setup() {
 void loop() {
     Serial.println("Waiting for message");
     int packetSize = LoRa.parsePacket();
-    if (packetSize == sizeof(Packet)) {
+    if (packetSize > 0 && packetSize <= sizeof(Packet)) {
         Packet receivedPacket;
         uint8_t buffer[sizeof(Packet)];
-        for (int i = 0; i < sizeof(Packet); ++i) {
-            buffer[i] = LoRa.read();
-        }
+//        for (int i = 0; i < sizeof(Packet); ++i) {
+//            buffer[i] = LoRa.read();
+//        }
+        LoRa.readBytes(buffer, packetSize);
         parsePacket(buffer, receivedPacket);
+
+//        for (int i = 0; i < sizeof(receivedPacket.message); ++i) {
+//            Serial.print((char)receivedPacket.message[i]);
+//        }
 
         if (receivedPacket.addressTo == SERVER_ADDRESS || receivedPacket.addressTo == 0xFFFF) {
             if (receivedPacket.magicByte == 50) { // Check if it's our protocol
