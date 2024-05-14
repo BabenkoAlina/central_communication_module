@@ -221,7 +221,6 @@ void writeFile(fs::FS &fs, const char * path, SensorStruct sensor){
     } else {
         Serial.println("- write failed");
     }
-
     file.close();
 }
 
@@ -273,10 +272,6 @@ void readFiles(fs::FS &fs, File root) {
                 }
             }
 
-            // Read type and measurement from file
-            String type = file.readStringUntil(',');
-            String measurement = file.readStringUntil('\n');
-
             Serial.print("Address: ");
             Serial.println(address);
             Serial.print("Hashed key: ");
@@ -284,12 +279,8 @@ void readFiles(fs::FS &fs, File root) {
                 Serial.print(sensor.hashedKey[i], HEX); // Print each byte of the hashed key in hexadecimal format
             }
             Serial.println();
-            // Store sensor measurements in map
+
             dataSPIFFS[address] = sensor;
-            for (int i = 0; i < 32; i++) {
-                Serial.print(sensor.hashedKey[i], HEX);
-            }
-            Serial.println();
         }
 
         file = root.openNextFile();
@@ -431,23 +422,23 @@ void setup() {
         while (1);
     }
     LoRa.enableCrc();
-    if (!SPIFFS.begin(true)) {
-        Serial.println("An Error has occurred while mounting SPIFFS");
-        return;
+//    if (!SPIFFS.begin(true)) {
+//        Serial.println("An Error has occurred while mounting SPIFFS");
+//        return;
     }
 
-    Serial.println();
-    Serial.println("Connecting to Wi-Fi...");
-    WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-    }
-    Serial.println("");
-    Serial.println("Wi-Fi connected.");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
-//    listDir(SPIFFS, "/", 0);
+//    Serial.println();
+//    Serial.println("Connecting to Wi-Fi...");
+//    WiFi.begin(ssid, password);
+//    while (WiFi.status() != WL_CONNECTED) {
+//        delay(500);
+//        Serial.print(".");
+//    }
+//    Serial.println("");
+//    Serial.println("Wi-Fi connected.");
+//    Serial.println("IP address: ");
+//    Serial.println(WiFi.localIP());
+////    listDir(SPIFFS, "/", 0);
 //    File root = SPIFFS.open("/");
 //    writeSPIFFS((const uint8_t*)"Temperature, °C", 1);
 //    writeSPIFFS((const uint8_t*)"Humidity, %", 2);
@@ -460,6 +451,7 @@ void setup() {
 void loop() {
     int packetSize = LoRa.parsePacket();
     Serial.println(packetSize);
+    
     if (packetSize > 0 && packetSize <= sizeof(Packet)) {
       Packet receivedPacket;
         uint8_t buffer[sizeof(Packet)];
@@ -478,58 +470,51 @@ void loop() {
                     }
                     Serial.println();
                     // if temperature sensor 1
-                    if (receivedPacket.addressFrom == 1) {
-                        temperature = atof((const char*)receivedPacket.message);
-                    } else if (receivedPacket.addressFrom == 2) {
-                        humidity = atof((const char*)receivedPacket.message);
-                    } else {
-                        Serial.println("Unknown sensor address");
-                    }
-
-                    // Prepare JSON document
-                    DynamicJsonDocument doc(2048);
-
-                    std::map<uint16_t, SensorStruct> dataSPIFFS;
-                    doc["sensor1"]["name"] = dataSPIFFS[1].type;
-
-                    doc["sensor1"]["name"] = "Thermometer";
-//                    doc["sensor1"]["name"] = dataSPIFFS[1].type;
-                    doc["sensor1"]["value"] = temperature;
-                    doc["sensor1"]["measurement"] = "*C";
-//                    doc["sensor1"]["measurement"] = dataSPIFFS[1].measurement;
-
-                    doc["sensor2"]["name"] = "Humidity sensor";
-//                    doc["sensor2"]["name"] = dataSPIFFS[2].type;
-                    doc["sensor2"]["value"] = humidity;
-                    doc["sensor2"]["measurement"] = "%";
-//                    doc["sensor2"]["measurement"] = dataSPIFFS[2].measurement;
-
-
-                    // Serialize JSON document
-                    String json;
-                    serializeJson(doc, json);
-
-                    WiFiClient client;
-                    HTTPClient http;
-
-                    // Send request
-                    Serial.println("Sending HTTP POST request...");
-                    http.begin(client, serverUrl);
-                    http.addHeader("Content-Type", "application/json");
-                    int httpCode = http.POST(json);
-
-                    // Check HTTP response
-                    if (httpCode > 0) {
-                        Serial.printf("HTTP POST request successful, status code: %d\n", httpCode);
-                        String payload = http.getString();
-                        Serial.println("Response payload:");
-                        Serial.println(payload);
-                    } else {
-                        Serial.printf("HTTP POST request failed, error: %s\n", http.errorToString(httpCode).c_str());
-                    }
-
-                    // Disconnect
-                    http.end();
+//                    if (receivedPacket.addressFrom == 1) {
+//                        temperature = atof((const char*)receivedPacket.message);
+//                    } else if (receivedPacket.addressFrom == 2) {
+//                        humidity = atof((const char*)receivedPacket.message);
+//                    } else {
+//                        Serial.println("Unknown sensor address");
+//                    }
+//
+//                    // Prepare JSON document
+//                    DynamicJsonDocument doc(2048);
+//
+//                    doc["sensor1"]["name"] = "Thermometer";
+//                    doc["sensor1"]["value"] = temperature;
+//                    doc["sensor1"]["measurement"] = "*C";
+//
+//                    doc["sensor2"]["name"] = "Humidity sensor";
+//                    doc["sensor2"]["value"] = humidity;
+//                    doc["sensor2"]["measurement"] = "%";
+//
+//
+//                    // Serialize JSON document
+//                    String json;
+//                    serializeJson(doc, json);
+//
+//                    WiFiClient client;
+//                    HTTPClient http;
+//
+//                    // Send request
+//                    Serial.println("Sending HTTP POST request...");
+//                    http.begin(client, serverUrl);
+//                    http.addHeader("Content-Type", "application/json");
+//                    int httpCode = http.POST(json);
+//
+//                    // Check HTTP response
+//                    if (httpCode > 0) {
+//                        Serial.printf("HTTP POST request successful, status code: %d\n", httpCode);
+//                        String payload = http.getString();
+//                        Serial.println("Response payload:");
+//                        Serial.println(payload);
+//                    } else {
+//                        Serial.printf("HTTP POST request failed, error: %s\n", http.errorToString(httpCode).c_str());
+//                    }
+//
+//                    // Disconnect
+//                    http.end();
                 }
             }
         }
