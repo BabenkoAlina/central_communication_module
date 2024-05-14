@@ -26,7 +26,16 @@
 #include <AES.h>
 #include <base64.hpp>
 
-#define SERVER_ADDRESS 0x00
+#include <Arduino.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+
+const char* ssid = "4special";
+const char* password = "something";
+const char* serverUrl = "http://httpbin.org/post"; // URL to POST the JSON data
+
+#define SERVER_ADDRESS 0x05
 
 #define HEADER_PAIRING_REQUEST 1
 #define HEADER_PAIRING_RESPONSE 2
@@ -36,6 +45,7 @@
 #define HEADER_MESSAGE 255
 
 struct SensorStruct {
+  
     char type[50];
     char measurement[50];
     uint8_t hashedKey[32];
@@ -53,6 +63,9 @@ AES256 cipherBlock;
 SHA3_256 sha3;
 
 unsigned char base64_buffer[256];
+
+float temperature = 0;
+float humidity = 0;
 
 
 struct Packet {
@@ -274,15 +287,16 @@ void readFiles(fs::FS &fs, File root) {
     }
 }
 
+
 void writeSPIFFS(const uint8_t* message, uint16_t sensorAddress) {
-    uint8_t *decodedMessage = decrypt_message(message);
+//    uint8_t *decodedMessage = decrypt_message(message);
     SensorStruct info;
     memcpy(info.hashedKey, hashedKey, sizeof(hashedKey));
 
     // split uint8_t* message by coma into type and measurement
     char type[50];
     char measurement[50];
-    sscanf((const char*)decodedMessage, "%[^,], %[^\n]", type, measurement);
+    sscanf((const char*)message, "%[^,], %[^\n]", type, measurement);
     strncpy(info.type, type, sizeof(info.type));
     strncpy(info.measurement, measurement, sizeof(info.measurement));
 
@@ -318,14 +332,14 @@ void handlePairing(Packet& packet) {
 //            LoRa.write(buffer[i]);
 ////            Serial.println(buffer[i]);
 //        }
-        LoRa.write(buffer, sizeof(Packet));
-        for (int i = 0; i < sizeof(Packet); ++i) {
-            Serial.print(buffer[i]);
-        }
+//        LoRa.write(buffer, sizeof(Packet));
+        LoRa.write(1);
+//        for (int i = 0; i < sizeof(Packet); ++i) {
+//            Serial.print(buffer[i]);
+//        }
         Serial.println();
-        
-        
         LoRa.endPacket();
+
 
         // receive public key from sensor //////////////////////////////////
         int packetSize = LoRa.parsePacket();
@@ -397,10 +411,6 @@ void handlePairing(Packet& packet) {
 }
 
 
-
-
-
-
 void setup() {
     Serial.begin(9600);
 //  (int ss, int reset, int dio0)
@@ -412,12 +422,26 @@ void setup() {
         while (1);
     }
     LoRa.enableCrc();
-    if (!SPIFFS.begin(true)) {
-        Serial.println("An Error has occurred while mounting SPIFFS");
-        return;
+//    if (!SPIFFS.begin(true)) {
+//        Serial.println("An Error has occurred while mounting SPIFFS");
+//        return;
     }
-//    listDir(SPIFFS, "/", 0);
+
+//    Serial.println();
+//    Serial.println("Connecting to Wi-Fi...");
+//    WiFi.begin(ssid, password);
+//    while (WiFi.status() != WL_CONNECTED) {
+//        delay(500);
+//        Serial.print(".");
+//    }
+//    Serial.println("");
+//    Serial.println("Wi-Fi connected.");
+//    Serial.println("IP address: ");
+//    Serial.println(WiFi.localIP());
+////    listDir(SPIFFS, "/", 0);
 //    File root = SPIFFS.open("/");
+//    writeSPIFFS((const uint8_t*)"Temperature, °C", 1);
+//    writeSPIFFS((const uint8_t*)"Humidity, %", 2);
 //    readFiles(SPIFFS, root);
 //    deleteFile(SPIFFS, "/1");
 //    listDir(SPIFFS, "/", 0);
@@ -425,34 +449,75 @@ void setup() {
 }
 
 void loop() {
-    Serial.println("Waiting for message");
     int packetSize = LoRa.parsePacket();
+    Serial.println(packetSize);
+    
     if (packetSize > 0 && packetSize <= sizeof(Packet)) {
-        Packet receivedPacket;
+      Packet receivedPacket;
         uint8_t buffer[sizeof(Packet)];
-//        for (int i = 0; i < sizeof(Packet); ++i) {
-//            buffer[i] = LoRa.read();
-//        }
         LoRa.readBytes(buffer, packetSize);
         parsePacket(buffer, receivedPacket);
-
-//        for (int i = 0; i < sizeof(receivedPacket.message); ++i) {
-//            Serial.print((char)receivedPacket.message[i]);
-//        }
-
+        delay(50);
         if (receivedPacket.addressTo == SERVER_ADDRESS || receivedPacket.addressTo == 0xFFFF) {
-            if (receivedPacket.magicByte == 50) { // Check if it's our protocol
-                if (receivedPacket.header == HEADER_PAIRING_REQUEST) { // Pairing header
-                    handlePairing(receivedPacket);
+            if (receivedPacket.magicByte == 50) {
+                if (receivedPacket.header == HEADER_PAIRING_REQUEST) {
+                    //handlePairing(receivedPacket);
                 } else {
-                    uint8_t* decryptedMessage = decrypt_message(receivedPacket.message);
+                    //uint8_t* decryptedMessage = decrypt_message(receivedPacket.message);
 
-                    for (int i = 0; i < sizeof(decryptedMessage); ++i) {
-                        Serial.print((char)decryptedMessage[i]);
+                    for (int i = 0; i < sizeof(receivedPacket.message); ++i) {
+                        Serial.print((char)receivedPacket.message[i]);
                     }
+                    Serial.println();
+                    // if temperature sensor 1
+//                    if (receivedPacket.addressFrom == 1) {
+//                        temperature = atof((const char*)receivedPacket.message);
+//                    } else if (receivedPacket.addressFrom == 2) {
+//                        humidity = atof((const char*)receivedPacket.message);
+//                    } else {
+//                        Serial.println("Unknown sensor address");
+//                    }
+//
+//                    // Prepare JSON document
+//                    DynamicJsonDocument doc(2048);
+//
+//                    doc["sensor1"]["name"] = "Thermometer";
+//                    doc["sensor1"]["value"] = temperature;
+//                    doc["sensor1"]["measurement"] = "*C";
+//
+//                    doc["sensor2"]["name"] = "Humidity sensor";
+//                    doc["sensor2"]["value"] = humidity;
+//                    doc["sensor2"]["measurement"] = "%";
+//
+//
+//                    // Serialize JSON document
+//                    String json;
+//                    serializeJson(doc, json);
+//
+//                    WiFiClient client;
+//                    HTTPClient http;
+//
+//                    // Send request
+//                    Serial.println("Sending HTTP POST request...");
+//                    http.begin(client, serverUrl);
+//                    http.addHeader("Content-Type", "application/json");
+//                    int httpCode = http.POST(json);
+//
+//                    // Check HTTP response
+//                    if (httpCode > 0) {
+//                        Serial.printf("HTTP POST request successful, status code: %d\n", httpCode);
+//                        String payload = http.getString();
+//                        Serial.println("Response payload:");
+//                        Serial.println(payload);
+//                    } else {
+//                        Serial.printf("HTTP POST request failed, error: %s\n", http.errorToString(httpCode).c_str());
+//                    }
+//
+//                    // Disconnect
+//                    http.end();
                 }
             }
         }
     }
-    delay(100);
+    delay(50);
 }
