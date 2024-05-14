@@ -19,10 +19,15 @@
 #include <AES.h>
 #include <base64.hpp>
 
-#define SENSOR_ADDRESS 0x01
+#include "DHT.h"
+#define DHT_PIN 2
+#define DHT_TYPE DHT11
+DHT dht11(DHT_PIN, DHT_TYPE);
+
+#define SENSOR_ADDRESS 0x02
 
 #define IS_PAIRED_ADDRESS 0
-#define SERVER_ADDRESS 1
+#define SERVER_ADDRESS 0x05
 #define SECRET_HASH_ADDRESS 3
 
 #define notPaired 32
@@ -53,6 +58,8 @@ SHA3_256 sha3;
 int gpioPin = 0;
 
 unsigned char base64_buffer[256];
+uint8_t decryptedText[58];
+uint8_t encodedText[58];
 
 struct Packet {
     uint8_t magicByte;
@@ -67,7 +74,13 @@ void createPacket(Packet& packet, uint8_t header, uint16_t addressTo, uint16_t a
     packet.header = header;
     packet.addressTo = addressTo;
     packet.addressFrom = addressFrom;
-    memcpy(packet.message, message, 58);
+
+    // Ensure message is null-terminated
+    uint8_t messageBuffer[sizeof(packet.message)];
+    memset(messageBuffer, 0, sizeof(messageBuffer));
+    memcpy(messageBuffer, message, sizeof(messageBuffer) - 1); // Copy message, leaving space for null-terminator
+
+    strncpy((char*)packet.message, (const char*)messageBuffer, sizeof(packet.message));
 }
 
 
@@ -95,15 +108,16 @@ void generate_keys() {
 
 void mix_key(uint8_t* publicKeyReceived) {
     Serial.println("derive shared key for user1");
-    if(!Curve25519::dh2(combinedKey, privateKeySensor)){
+    if(!Curve25519::dh2(publicKeyReceived, privateKeySensor)){
         Serial.println("Couldn't derive shared key");
     };
     Serial.println("derived the key");
+    memcpy(hashedKey, publicKeyReceived, 32);
 
-    Serial.println("mixed key: ");
-    encode_base64(combinedKey, 32, base64_buffer);
-    Serial.println((char *) base64_buffer);
-    Serial.print("\n");
+    // Serial.println("mixed key: ");
+    // encode_base64(combinedKey, 32, base64_buffer);
+    // Serial.println((char *) base64_buffer);
+    // Serial.print("\n");
 }
 
 
@@ -117,38 +131,70 @@ void hash_key(){
 //    for (uint8_t elem : hashedKey) {
 //        Serial.print(elem, HEX);
 //    }
-    Serial.println("hashed key: ");
-    encode_base64(encryptionKey, 32, base64_buffer);
-    Serial.println((char *) base64_buffer);
-    Serial.print("\n");
+    // Serial.println("hashed key: ");
+    // encode_base64(encryptionKey, 32, base64_buffer);
+    // Serial.println((char *) base64_buffer);
+    // Serial.print("\n");
 }
 
 
-uint8_t* encode_message(const uint8_t* text) {
-    Serial.println("encode message");
+// uint8_t* encode_message(const uint8_t* text) {
+//     Serial.println("encode message");
 
-    uint8_t encodedText[58];
+//     uint8_t encodedText[58];
+//     cipherBlock.setKey(hashedKey, 32);
+//     cipherBlock.encryptBlock(encodedText, text); // , 57);
+
+//     Serial.println((char *) encodedText);
+//     encode_base64(encodedText, 32, base64_buffer);
+//     Serial.println((char *) base64_buffer);
+//   for (int i=0; i<58; i++){
+//      Serial.print((char)encodedText[i]);
+//   }
+//     Serial.print("\n");
+
+//     return base64_buffer;
+// }
+
+
+void encode_message(const uint8_t* text) {
+    // for(int i =0; i<32; ++i){
+    //   Serial.print(text[i]);
+    // }
+    // Serial.println("encode message");
+
     cipherBlock.setKey(hashedKey, 32);
     cipherBlock.encryptBlock(encodedText, text); // , 57);
+    // for(int i =0; i<32; ++i){
+    //   Serial.print(encodedText[i]);
+    // }
 
-    encode_base64(encodedText, 32, base64_buffer);
-    Serial.println((char *) base64_buffer);
-    Serial.print("\n");
+    //encode_base64(encodedText, 32, base64_buffer);
 
-    return encodedText;
+    //Serial.println((char *) base64_buffer);
+    // for(int i =0; i<32; ++i){
+    //   Serial.print(encodedText[i]);
+    // }
+    // Serial.print("\n");
+}
+
+void decrypt_message() {
+    // for(int i =0; i<32; ++i){
+    //   Serial.print(encodedText[i]);
+    // }
+    // Serial.println("decrypt message");
+
+    cipherBlock.setKey(hashedKey, 32);
+    cipherBlock.decryptBlock(decryptedText, encodedText);
+    //encode_base64(decrypted, 32, base64_buffer);
+    // for(int i =0; i<32; ++i){
+    //   Serial.print(decryptedText[i]);
+    // }
+    // Serial.print("\n");
 }
 
 
-uint8_t* decrypt_message(const uint8_t* gotText) {
-    Serial.println("decrypt message");
-    uint8_t decrypted[58];
 
-    cipherBlock.decryptBlock(decrypted, gotText);
-    encode_base64(decrypted, 32, base64_buffer);
-    Serial.println((char *) base64_buffer);
-    Serial.print("\n");
-    return decrypted;
-}
 
 
 
@@ -183,37 +229,40 @@ void handlePairing() {
     uint8_t receivedPublicKey[32];
     while (true) {
         // broadcast request /////////////////////////////////////////////
+        uint8_t message[]= "Requesting pairing";
         Serial.println("Sending broadcast request");
         Packet packet;
-        createPacket(packet, HEADER_PAIRING_REQUEST, 0xFFFF, SENSOR_ADDRESS, reinterpret_cast<const uint8_t*>("Requesting pairing"));
+        createPacket(packet, HEADER_PAIRING_REQUEST, 0xFFFF, SENSOR_ADDRESS, message);
         uint8_t buffer[sizeof(Packet)];
         memcpy(buffer, &packet, sizeof(Packet));
         LoRa.beginPacket();
-        for (int i = 0; i < sizeof(Packet); ++i) {
-            LoRa.write(buffer[i]);
-        }
+        LoRa.write(buffer, sizeof(Packet));
         LoRa.endPacket();
 
         // get key ///////////////////////////////////////////////////////
         Serial.println("Getting response");
+        delay(2000);
         int packetSize = LoRa.parsePacket();
-        if (packetSize == sizeof(Packet)) {
+        //Serial.println(packetSize);
+        if (packetSize >0 && packetSize<=sizeof(Packet)) {
             Serial.println("got some");
             Packet receivedPacket;
             uint8_t buffer[sizeof(Packet)];
-            for (int i = 0; i < sizeof(Packet); ++i) {
-                buffer[i] = LoRa.read();
-            }
+            // for (int i = 0; i < sizeof(Packet); ++i) {
+            //     buffer[i] = LoRa.read();
+            // }
+            LoRa.readBytes(buffer, packetSize);
+
             parsePacket(buffer, receivedPacket);
             if (receivedPacket.addressTo == SENSOR_ADDRESS && receivedPacket.header == HEADER_PAIRING_RESPONSE &&
                 receivedPacket.magicByte == 50) {
                 memcpy(receivedPublicKey, receivedPacket.message, 32);
                 serverAddress = receivedPacket.addressFrom;
 
-                Serial.println("Received public key");
-                for (uint8_t elem : receivedPublicKey) {
-                    Serial.print(elem, HEX);
-                }
+                // Serial.println("Received public key");
+                // for (uint8_t elem : receivedPublicKey) {
+                //     Serial.print(elem, HEX);
+                // }
                 break;
             }
         }
@@ -222,8 +271,6 @@ void handlePairing() {
     generate_keys();
 
     mix_key(receivedPublicKey);
-
-    hash_key();
 
     // sending public key ////////////////////////////////////////////
     while (true) {
@@ -237,6 +284,7 @@ void handlePairing() {
         }
         LoRa.endPacket();
 
+        delay(1000);
         // get encrypted hello //////////////////////////////////////////
         int packetSize = LoRa.parsePacket();
         if (packetSize == sizeof(Packet)) {
@@ -249,10 +297,10 @@ void handlePairing() {
             Serial.println("before pairing procedure");
             if (receivedPacket.addressTo == SERVER_ADDRESS && receivedPacket.header == HEADER_ENCRYPTED_HELLO &&
                 receivedPacket.magicByte == 50) {
-                uint8_t *decrypted = decrypt_message(receivedPacket.message);
-                for (int i = 0; i < 57; i++) {
-                    Serial.print((char) decrypted[i]);
-                }
+                memcpy(encodedText, receivedPacket.message, 58);
+                decrypt_message();
+                String text = String((char*)decryptedText);
+                Serial.println(text);
                 break;
             }
         }
@@ -263,14 +311,14 @@ void handlePairing() {
     for (int i = 0; i < 10; i++) {
         Packet packet;
         uint8_t infoMessage[] = "Temperature, Celsius";
-        uint8_t *cipherText = encode_message(infoMessage);
+        encode_message(infoMessage);
 
-        Serial.println("info text:");
-        encode_base64(cipherText, 32, base64_buffer);
-        Serial.println((char *) base64_buffer);
-        Serial.print("\n");
+        // Serial.println("info text:");
+        // encode_base64(cipherText, 32, base64_buffer);
+        // Serial.println((char *) base64_buffer);
+        // Serial.print("\n");
 
-        createPacket(packet, HEADER_INFORMAL_MESSAGE, serverAddress, SENSOR_ADDRESS, cipherText);
+        createPacket(packet, HEADER_INFORMAL_MESSAGE, serverAddress, SENSOR_ADDRESS, encodedText);
         uint8_t buffer[sizeof(Packet)];
         memcpy(buffer, &packet, sizeof(Packet));
         LoRa.beginPacket();
@@ -294,44 +342,90 @@ void setup() {
         while (1);
     }
     LoRa.enableCrc();
-//    readEEPROM();
-//    EEPROM.write(0,32);
-    isPaired = EEPROM.read(IS_PAIRED_ADDRESS);
-    if (isPaired == notPaired) {
-        Serial.println("I am ready for pairing!");
-        handlePairing();
-    } else {
-        pinMode(gpioPin, INPUT);
-        int state = digitalRead(gpioPin);
-        for (int i = 0; i < 100; ++i) {
-            if (state == HIGH) {
-                Serial.println("GPIO1 is HIGH. Read the address");
-            } else {
-                break;
-            }
-            delay(30);
-            if (i == 99) {
-                handlePairing();
-            }
-        }
-//        readEEPROM();
-    }
+    dht11.begin();
+    
+
+   readEEPROM();
+   EEPROM.write(0,32);
+   isPaired = EEPROM.read(IS_PAIRED_ADDRESS);
+   if (isPaired == notPaired) {
+       Serial.println("I am ready for pairing!");
+       handlePairing();
+   } else {
+       pinMode(gpioPin, INPUT);
+       int state = digitalRead(gpioPin);
+       for (int i = 0; i < 100; ++i) {
+           if (state == HIGH) {
+               Serial.println("GPIO1 is HIGH. Read the address");
+           } else {
+               break;
+           }
+           delay(30);
+           if (i == 99) {
+               handlePairing();
+           }
+       }
+       readEEPROM();
+   }
 }
 
 void loop() {
+  //generate_keys();
+    float temperature_C = dht11.readTemperature();
+    float humi  = dht11.readHumidity();
+
+    if (isnan(temperature_C) || isnan(humi)) {
+        Serial.println("Failed to read from DHT sensor!");
+    } else {
+        Serial.print("Humidity: ");
+        Serial.print(humi);
+        Serial.print("%");
+
+        Serial.print("  |  ");
+
+        Serial.print("Temperature: ");
+        Serial.println(temperature_C);
+    }
+    
+    uint8_t temperature[4];
+    // convert float to uint8_t array
+    if (SENSOR_ADDRESS == 0x01){
+      memcpy(temperature, &temperature_C, 4);
+    }else if (SENSOR_ADDRESS == 0x02){
+      memcpy(temperature, &humi, 4);
+    }
+
+
+  //   Serial.println("Temperature bytes:");
+  //   for (int i = 0; i < sizeof(temperature); i++) {
+  //     Serial.print(temperature[i]);
+  //     Serial.print(" ");
+  //     // Serial.print(temperature[i]);
+  //     // Serial.print(" ");
+  //   }
+  // Serial.println();
+  encode_message(temperature);
+  // decrypt_message();
+  // float decodedTemperature;
+  // memcpy(&decodedTemperature, temperature, sizeof(float));
+  // Serial.print("Decoded temperature original: ");
+  // Serial.println(decodedTemperature);
+  // memcpy(&decodedTemperature, decryptedText, sizeof(float));
+  // Serial.print("Decoded temperature: ");
+  // Serial.println(decodedTemperature);
+  // for (int i=0; i<58; i++){
+  //    Serial.print((char)decryptedText[i]);
+  // }
+ 
     Packet packet;
-    uint8_t message[] = "Hello, world!";
-    uint8_t* cipherText = encode_message(message);
-    createPacket(packet, HEADER_MESSAGE, serverAddress, SENSOR_ADDRESS, cipherText);
+    createPacket(packet, HEADER_MESSAGE, SERVER_ADDRESS, SENSOR_ADDRESS, encodedText);
     uint8_t buffer[sizeof(Packet)];
     memcpy(buffer, &packet, sizeof(Packet));
 
     int a = LoRa.beginPacket();
-    Serial.println(a);
+    // Serial.println(a);
 
-    for (int i = 0; i < sizeof(Packet); ++i) {
-        LoRa.write(buffer[i]);
-    }
+    LoRa.write(buffer, sizeof(Packet));
     LoRa.endPacket();
-    delay(200);
+    delay(1500);
 }
