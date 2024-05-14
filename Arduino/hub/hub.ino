@@ -26,6 +26,7 @@
 #include <AES.h>
 #include <base64.hpp>
 
+
 #include <Arduino.h>
 
 
@@ -52,6 +53,9 @@ uint8_t publicKeyHub[32];
 uint8_t combinedKey[32];
 uint8_t hashedKey[32];
 
+const char* ssid = "WIFI-UCU";  // WiFi (network) name
+const char* password = "password";  // Your WiFi password
+const char* serverUrl = "http://server_ip:8080/data";  // Change to your server's IP and port
 
 AES256 cipherBlock;
 SHA3_256 sha3;
