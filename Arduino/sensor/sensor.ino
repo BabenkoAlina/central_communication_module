@@ -19,10 +19,15 @@
 #include <AES.h>
 #include <base64.hpp>
 
+#include "DHT.h"
+#define DHT_PIN 2
+#define DHT_TYPE DHT11
+DHT dht11(DHT_PIN, DHT_TYPE);
+
 #define SENSOR_ADDRESS 0x01
 
 #define IS_PAIRED_ADDRESS 0
-#define SERVER_ADDRESS 1
+#define SERVER_ADDRESS 0x05
 #define SECRET_HASH_ADDRESS 3
 
 #define notPaired 32
@@ -67,7 +72,13 @@ void createPacket(Packet& packet, uint8_t header, uint16_t addressTo, uint16_t a
     packet.header = header;
     packet.addressTo = addressTo;
     packet.addressFrom = addressFrom;
-    memcpy(packet.message, message, 58);
+
+    // Ensure message is null-terminated
+    uint8_t messageBuffer[sizeof(packet.message)];
+    memset(messageBuffer, 0, sizeof(messageBuffer));
+    memcpy(messageBuffer, message, sizeof(messageBuffer) - 1); // Copy message, leaving space for null-terminator
+
+    strncpy((char*)packet.message, (const char*)messageBuffer, sizeof(packet.message));
 }
 
 
@@ -294,44 +305,68 @@ void setup() {
         while (1);
     }
     LoRa.enableCrc();
+    dht11.begin();
+
 //    readEEPROM();
 //    EEPROM.write(0,32);
-    isPaired = EEPROM.read(IS_PAIRED_ADDRESS);
-    if (isPaired == notPaired) {
-        Serial.println("I am ready for pairing!");
-        handlePairing();
-    } else {
-        pinMode(gpioPin, INPUT);
-        int state = digitalRead(gpioPin);
-        for (int i = 0; i < 100; ++i) {
-            if (state == HIGH) {
-                Serial.println("GPIO1 is HIGH. Read the address");
-            } else {
-                break;
-            }
-            delay(30);
-            if (i == 99) {
-                handlePairing();
-            }
-        }
+//    isPaired = EEPROM.read(IS_PAIRED_ADDRESS);
+//    if (isPaired == notPaired) {
+//        Serial.println("I am ready for pairing!");
+//        handlePairing();
+//    } else {
+//        pinMode(gpioPin, INPUT);
+//        int state = digitalRead(gpioPin);
+//        for (int i = 0; i < 100; ++i) {
+//            if (state == HIGH) {
+//                Serial.println("GPIO1 is HIGH. Read the address");
+//            } else {
+//                break;
+//            }
+//            delay(30);
+//            if (i == 99) {
+//                handlePairing();
+//            }
+//        }
 //        readEEPROM();
-    }
+//    }
 }
 
 void loop() {
+    float temperature_C = dht11.readTemperature();
+    float humi  = dht11.readHumidity();
+
+    if (isnan(temperature_C) || isnan(humi)) {
+        Serial.println("Failed to read from DHT sensor!");
+    } else {
+        Serial.print("Humidity: ");
+        Serial.print(humi);
+        Serial.print("%");
+
+        Serial.print("  |  ");
+
+        Serial.print("Temperature: ");
+        Serial.println(temperature_C);
+    }
+    // convert float to uint8_t array
+    uint8_t temperature[4];
+    memcpy(temperature, &temperature_C, 4);
+
+    Serial.println("Temperature bytes:");
+    for (int i = 0; i < sizeof(temperature); i++) {
+      Serial.print(temperature[i], HEX);
+      Serial.print(" ");
+    }
+  Serial.println();
+
     Packet packet;
-    uint8_t message[] = "Hello, world!";
-    uint8_t* cipherText = encode_message(message);
-    createPacket(packet, HEADER_MESSAGE, serverAddress, SENSOR_ADDRESS, cipherText);
+    createPacket(packet, HEADER_MESSAGE, SERVER_ADDRESS, SENSOR_ADDRESS, temperature);
     uint8_t buffer[sizeof(Packet)];
     memcpy(buffer, &packet, sizeof(Packet));
 
     int a = LoRa.beginPacket();
     Serial.println(a);
 
-    for (int i = 0; i < sizeof(Packet); ++i) {
-        LoRa.write(buffer[i]);
-    }
+    LoRa.write(buffer, sizeof(Packet));
     LoRa.endPacket();
     delay(200);
 }
